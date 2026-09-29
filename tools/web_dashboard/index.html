@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IDR — Intelligent Dead Reckoning Live Telemetry & Fusion Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0d14;
+      --bg-surface: #121826;
+      --bg-glass: rgba(18, 24, 38, 0.75);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-glow: rgba(56, 189, 248, 0.25);
+      --accent-cyan: #06b6d4;
+      --accent-sky: #38bdf8;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --font-ui: 'Outfit', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-glass);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .logo-badge {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-sky));
+      color: #000;
+      font-weight: 700;
+      font-size: 1.1rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #fff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .dpdp-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--accent-emerald);
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      padding: 1.5rem 2rem;
+      display: grid;
+      grid-template-columns: 360px 1fr 340px;
+      gap: 1.5rem;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--border-glow), transparent);
+    }
+
+    .card-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Gauges */
+    .speedo-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    .speedo-svg {
+      width: 200px;
+      height: 120px;
+    }
+
+    .speed-number {
+      font-size: 3rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      line-height: 1;
+      color: #fff;
+    }
+
+    .speed-unit {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* Metric Grid */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .metric-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 0.75rem;
+    }
+
+    .metric-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .metric-val {
+      font-size: 1.1rem;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      margin-top: 0.25rem;
+    }
+
+    /* Map Display */
+    .map-container {
+      background: #06090f;
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .map-header {
+      padding: 0.85rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(18, 24, 38, 0.6);
+      border-bottom: 1px solid var(--border-subtle);
+      z-index: 10;
+    }
+
+    #trajectoryCanvas {
+      width: 100%;
+      height: 100%;
+      min-height: 480px;
+      display: block;
+    }
+
+    .map-overlay {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      background: var(--bg-glass);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-subtle);
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      display: flex;
+      gap: 1.25rem;
+      font-size: 0.8rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 4px;
+      border-radius: 2px;
+    }
+
+    /* Right Column: Filter Comparison */
+    .filter-item {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .filter-item.active-iekf {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.15);
+    }
+
+    .filter-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .progress-bar-bg {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    /* Controls */
+    .controls-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: auto;
+    }
+
+    button {
+      background: var(--bg-surface);
+      color: var(--text-main);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--accent-sky);
+    }
+
+    button.primary {
+      background: var(--accent-sky);
+      color: #000;
+      border-color: var(--accent-sky);
+      font-weight: 600;
+    }
+
+    button.primary:hover {
+      background: #7dd3fc;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="logo-badge">IDR</div>
+      <div class="brand-title">Intelligent Dead Reckoning Engine — Live Fusion & Telemetry</div>
+    </div>
+    <div class="dpdp-badge">
+      <div class="status-dot"></div>
+      DPDP Act 2023 Compliant (Pseudonymized • Zero-PII)
+    </div>
+  </header>
+
+  <main>
+    <!-- Left Column: Primary Vehicle HUD -->
+    <div class="card">
+      <div class="card-title">
+        <span>Vehicle Dynamics</span>
+        <span id="vehicleTypeBadge" style="color: var(--accent-sky);">AUTO_RICKSHAW</span>
+      </div>
+
+      <div class="speedo-container">
+        <svg class="speedo-svg" viewBox="0 0 200 120">
+          <!-- Background arc -->
+          <path d="M 20 110 A 80 80 0 0 1 180 110" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="12" stroke-linecap="round"/>
+          <!-- Active speed arc -->
+          <path id="speedArc" d="M 20 110 A 80 80 0 0 1 180 110" fill="none" stroke="url(#speedGrad)" stroke-width="12" stroke-dasharray="251" stroke-dashoffset="150" stroke-linecap="round"/>
+          <defs>
+            <linearGradient id="speedGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#06b6d4" />
+              <stop offset="100%" stop-color="#f59e0b" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="speed-number" id="speedDisplay">48.2</div>
+        <div class="speed-unit">KM / H</div>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric-box">
+          <div class="metric-label">NAV MODE</div>
+          <div class="metric-val" id="navModeVal" style="color: var(--accent-amber);">DR_ACTIVE</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">HEADING</div>
+          <div class="metric-val" id="headingVal">084.5°</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">LAYER ELEVATION</div>
+          <div class="metric-val" id="layerVal" style="color: var(--accent-emerald);">FLYOVER (+12m)</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">1σ ACCURACY</div>
+          <div class="metric-val" id="accVal">±2.4 m</div>
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-top: 0.5rem;">Sensor Subsystems</div>
+      <div class="metric-grid">
+        <div class="metric-box">
+          <div class="metric-label">IMU RATE</div>
+          <div class="metric-val">100.2 Hz</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">GNSS INTEGRITY</div>
+          <div class="metric-val" id="gnssIntegrityVal" style="color: var(--accent-rose);">BLACKOUT</div>
+        </div>
+      </div>
+
+      <div class="controls-bar">
+        <button id="togglePlayBtn" class="primary">Pause Playback</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+    </div>
+
+    <!-- Center Column: Multi-Layer Trajectory Canvas -->
+    <div class="map-container">
+      <div class="map-header">
+        <div style="font-weight: 600; font-size: 0.95rem;">
+          Delhi Multi-Layer Corridor: Barapullah Flyover & Underpass
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);" id="simTime">
+          T+00:18.4s
+        </div>
+      </div>
+
+      <canvas id="trajectoryCanvas"></canvas>
+
+      <div class="map-overlay">
+        <div class="legend-item">
+          <div class="legend-color" style="background: var(--accent-emerald);"></div>
+          <span>Elevated Flyover (Layer 1)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: var(--accent-sky);"></div>
+          <span>Ring Road Surface (Layer 0)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: var(--accent-amber);"></div>
+          <span>AIIMS Underpass (Layer -1)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #fff; border: 1px dashed #fff;"></div>
+          <span>Dead Reckoned Path</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Filter Comparison & DPDP Audit -->
+    <div class="card">
+      <div class="card-title">Filter Engine Comparison</div>
+
+      <div class="filter-item active-iekf">
+        <div class="filter-header">
+          <span style="color: var(--accent-cyan);">Invariant EKF on SE₂(3)</span>
+          <span id="iekfDrift">3.1 m drift</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="iekfBar" style="width: 25%; background: var(--accent-cyan);"></div>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">
+          Trajectory-independent dynamics • NEES: 1.4
+        </div>
+      </div>
+
+      <div class="filter-item">
+        <div class="filter-header">
+          <span>Standard Error-State EKF</span>
+          <span id="eskfDrift">5.8 m drift</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="eskfBar" style="width: 45%; background: var(--accent-amber);"></div>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">
+          Linearization mismatch in turns • NEES: 6.2
+        </div>
+      </div>
+
+      <div class="filter-item">
+        <div class="filter-header">
+          <span>Lightweight Neural Model</span>
+          <span id="neuralDrift">4.2 m drift</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="neuralBar" style="width: 32%; background: var(--accent-emerald);"></div>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">
+          41K params • 0.9ms latency • Uncertainty gated
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-top: 0.5rem;">DPDP 2023 Consent Audit</div>
+      <div class="metric-box">
+        <div class="metric-label">PSEUDONYMIZED CLIENT ID</div>
+        <div class="metric-val" style="font-size: 0.75rem; word-break: break-all;">
+          idr-dev-7f8a9b2c1e4d
+        </div>
+      </div>
+      <div class="metric-box">
+        <div class="metric-label">CRYPTOGRAPHIC AUDIT TOKEN</div>
+        <div class="metric-val" style="font-size: 0.75rem; word-break: break-all; color: var(--accent-emerald);">
+          SHA256: 4a7f98c2e...b31e
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const canvas = document.getElementById('trajectoryCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let isPlaying = true;
+    let time = 0;
+    const simTimeElem = document.getElementById('simTime');
+    const speedDisplay = document.getElementById('speedDisplay');
+    const headingVal = document.getElementById('headingVal');
+    const layerVal = document.getElementById('layerVal');
+    const gnssIntegrityVal = document.getElementById('gnssIntegrityVal');
+    const iekfDriftElem = document.getElementById('iekfDrift');
+    const eskfDriftElem = document.getElementById('eskfDrift');
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight - 60;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Road corridors coordinates in local projection
+    const roads = [
+      { name: "Barapullah Elevated", layer: 1, color: "#10b981", pts: [[50, 180], [250, 190], [500, 210], [750, 230], [950, 240]] },
+      { name: "Ring Road Surface", layer: 0, color: "#38bdf8", pts: [[50, 320], [250, 310], [500, 300], [750, 290], [950, 280]] },
+      { name: "AIIMS Underpass", layer: -1, color: "#f59e0b", pts: [[200, 420], [400, 410], [600, 395], [800, 380]] }
+    ];
+
+    function draw() {
+      if (!canvas.width) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw Grid
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < canvas.width; x += 40) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += 40) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+      }
+
+      // Draw Roads
+      roads.forEach(road => {
+        ctx.strokeStyle = road.color;
+        ctx.lineWidth = road.layer > 0 ? 8 : 6;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        road.pts.forEach((pt, idx) => {
+          const sx = (pt[0] / 1000) * canvas.width;
+          const sy = (pt[1] / 500) * canvas.height;
+          if (idx === 0) ctx.moveTo(sx, sy);
+          else ctx.lineTo(sx, sy);
+        });
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = road.color;
+        ctx.font = "11px Outfit";
+        const first = road.pts[0];
+        ctx.fillText(road.name, (first[0] / 1000) * canvas.width + 10, (first[1] / 500) * canvas.height - 10);
+      });
+
+      // Vehicle trajectory along Barapullah Flyover
+      const progress = (time % 30) / 30;
+      const vx = 50 + progress * 900;
+      const vy = 180 + Math.sin(progress * Math.PI) * 50;
+
+      const sx = (vx / 1000) * canvas.width;
+      const sy = (vy / 500) * canvas.height;
+
+      // Draw Covariance Ellipse (95% confidence)
+      const isOutage = (progress > 0.35 && progress < 0.85);
+      const sigma = isOutage ? (1.5 + (progress - 0.35) * 8) : 1.5;
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, sigma * 6, sigma * 4, 0.1, 0, Math.PI * 2);
+      ctx.fillStyle = isOutage ? "rgba(245, 158, 11, 0.15)" : "rgba(16, 185, 129, 0.15)";
+      ctx.strokeStyle = isOutage ? "rgba(245, 158, 11, 0.6)" : "rgba(16, 185, 129, 0.6)";
+      ctx.lineWidth = 1.5;
+      ctx.fill();
+      ctx.stroke();
+
+      // Vehicle Marker (Chevron)
+      ctx.rotate(0.08);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.moveTo(12, 0);
+      ctx.lineTo(-8, -7);
+      ctx.lineTo(-4, 0);
+      ctx.lineTo(-8, 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // Update Telemetry Displays
+      if (isPlaying) time += 0.05;
+      simTimeElem.textContent = `T+00:${Math.floor(time).toString().padStart(2, '0')}.${Math.floor((time % 1) * 10)}s`;
+
+      const speed = isOutage ? 52.4 + Math.sin(time) * 3.0 : 48.0 + Math.cos(time * 0.5) * 2.0;
+      speedDisplay.textContent = speed.toFixed(1);
+
+      if (isOutage) {
+        gnssIntegrityVal.textContent = "OUTAGE (DR)";
+        gnssIntegrityVal.style.color = "var(--accent-amber)";
+        const drift = ((progress - 0.35) * 6.5).toFixed(1);
+        iekfDriftElem.textContent = `${(drift * 0.7).toFixed(1)} m drift`;
+        eskfDriftElem.textContent = `${drift} m drift`;
+      } else {
+        gnssIntegrityVal.textContent = "HEALTHY (NavIC)";
+        gnssIntegrityVal.style.color = "var(--accent-emerald)";
+        iekfDriftElem.textContent = "0.8 m drift";
+        eskfDriftElem.textContent = "1.1 m drift";
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+
+    document.getElementById('togglePlayBtn').onclick = () => {
+      isPlaying = !isPlaying;
+      document.getElementById('togglePlayBtn').textContent = isPlaying ? "Pause Playback" : "Resume Playback";
+    };
+
+    document.getElementById('resetBtn').onclick = () => {
+      time = 0;
+    };
+  </script>
+</body>
+</html>

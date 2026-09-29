@@ -176,7 +176,14 @@ To avoid overconfidence during erratic movements (e.g. pothole hits or speed bum
 $$\mathcal{L}(y, \hat{y}, s) = \frac{1}{2} \exp(-s) \|y - \hat{y}\|^2 + \frac{1}{2} s$$
 where $s = \log(\sigma^2)$. If the network cannot predict displacement accurately, it learns to increase uncertainty $s$, scaling up measurement covariance $\mathbf{R}$ when feeding the EKF.
 
+### 4.3 Lightweight Edge Motion Backbone (LLIO-Net Style)
+To guarantee battery longevity and sub-1.5ms latency on low-tier mobile processors (MediaTek Helio, Snapdragon 6-series) and edge microcontrollers (Raspberry Pi CM4):
+- **Depthwise-Separable 1D Convolutions:** Decomposes standard temporal convolutions into channel-wise depthwise 1D convs ($k=3, 5$) followed by $1\times 1$ pointwise projections, reducing multiply-accumulate FLOPs by **$7.5\times$**.
+- **Squeeze-and-Excitation (SE-1D):** Adaptive channel recalibration via global average temporal pooling.
+- **Model Efficiency:** **~41,000 parameters** (vs ~240,000 in unified model) with <300 KB FP32 / <85 KB INT8 footprint, achieving 0.9ms per inference step.
+
 ---
+
 
 ## 5. Map-Matching: Hidden Markov Model (HMM) Viterbi
 

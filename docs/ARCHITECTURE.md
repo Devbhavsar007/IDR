@@ -87,7 +87,32 @@ $$\mathbf{b}_a \leftarrow \mathbf{b}_a + \delta \mathbf{b}_a, \quad \mathbf{b}_g
 
 Once injected, the error state is mathematically reset to zero: $\delta \mathbf{x} \leftarrow \mathbf{0}_{15 \times 1}$, and error covariance is updated via the reset Jacobian.
 
+### 2.4 Right-Invariant Extended Kalman Filter (RI-EKF) on $SE_2(3)$
+
+To resolve the classical EKF's **linearization inconsistency** during aggressive maneuvers (e.g., sharp 180° turns in congested alleys) and extended GNSS blackouts, IDR implements an alternative **Right-Invariant EKF** on the matrix Lie group $SE_2(3)$:
+
+#### 2.4.1 Lie Group State & Error
+$$\mathbf{X} = \begin{bmatrix} \mathbf{R} & \mathbf{v} & \mathbf{p} \\ \mathbf{0}_{1 \times 3} & 1 & 0 \\ \mathbf{0}_{1 \times 3} & 0 & 1 \end{bmatrix} \in SE_2(3), \quad \boldsymbol{\eta} = \hat{\mathbf{X}} \mathbf{X}^{-1} \in SE_2(3)$$
+
+#### 2.4.2 Trajectory-Independent Error Dynamics
+Unlike the standard ESKF where the error transition matrix $\mathbf{F}$ depends on the estimated orientation and specific force $[\mathbf{f}^n \times]$, the Right-Invariant continuous error Jacobian $\mathbf{A} \in \mathbb{R}^{15 \times 15}$ satisfies:
+$$\mathbf{A} = \begin{bmatrix}
+\mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3 & -\hat{\mathbf{R}} \\
+[\mathbf{g} \times] & \mathbf{0}_3 & \mathbf{0}_3 & -\hat{\mathbf{R}} & \mathbf{0}_3 \\
+\mathbf{0}_3 & \mathbf{I}_3 & \mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3 \\
+\mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3 \\
+\mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3 & \mathbf{0}_3
+\end{bmatrix}$$
+Here, $[\mathbf{g} \times]$ depends **only on the constant gravity vector**, completely removing linearization error from trajectory uncertainty!
+
+#### 2.4.3 Closed-Form Group Action Update
+Following measurement correction $\boldsymbol{\xi} \in \mathfrak{se}_2(3)$, the group state is updated via exact Lie group actions:
+$$\hat{\mathbf{R}} \leftarrow \exp([\boldsymbol{\xi}_\theta \times]) \hat{\mathbf{R}}$$
+$$\hat{\mathbf{v}} \leftarrow \exp([\boldsymbol{\xi}_\theta \times]) \hat{\mathbf{v}} + \boldsymbol{\xi}_v$$
+$$\hat{\mathbf{p}} \leftarrow \exp([\boldsymbol{\xi}_\theta \times]) \hat{\mathbf{p}} + \boldsymbol{\xi}_p$$
+
 ---
+
 
 ## 3. Physical Constraints & Vehicle Dynamics
 

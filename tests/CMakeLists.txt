@@ -14,6 +14,7 @@ add_executable(idr-tests
     unit/test_osm_loader.cpp
     unit/test_replay.cpp
     unit/test_multisensor_fusion.cpp
+    unit/test_iekf.cpp
 )
 
 target_include_directories(idr-tests PRIVATE

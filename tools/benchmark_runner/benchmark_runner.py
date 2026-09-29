@@ -95,8 +95,12 @@ class BenchmarkRunner:
                 "--outage-end", str(sc.outage_end),
             ]
             try:
-                proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                env = os.environ.copy()
+                if sys.platform == "win32" and "C:\\msys64\\mingw64\\bin" not in env.get("PATH", ""):
+                    env["PATH"] = "C:\\msys64\\mingw64\\bin;" + env.get("PATH", "")
+                proc = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
                 stdout = proc.stdout
+
                 ate = self._parse_metric(stdout, "ATE Position RMS:", 0.0)
                 max_err = self._parse_metric(stdout, "Max Position Error:", 0.0)
                 drift = self._parse_metric(stdout, "Drift Rate:", 0.0)

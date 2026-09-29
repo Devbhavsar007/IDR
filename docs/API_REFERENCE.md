@@ -176,3 +176,39 @@ Base URL: `http://<host>:8000`
   "download_url": "https://models.idr.internal/v1.0.0/model.onnx"
 }
 ```
+
+---
+
+## 4. Offline Vector Tile Binary Format (`.idrtile`)
+
+For zero-latency, internet-independent map rendering and dead-reckoning snapping, IDR packages regional road networks into `.idrtile` binary packages:
+
+### Header
+- `magic`: `b"IDRT"` (4 bytes)
+- `version`: `uint16` (2 bytes, current = 1)
+- `road_count`: `uint32` (4 bytes)
+- `bounding_box`: `min_lat, min_lon, max_lat, max_lon` (4 × `float64` = 32 bytes)
+
+### Road Records (Repeated `road_count` times)
+- `road_id`: `uint32` (4 bytes)
+- `layer`: `int8` (1 byte, `-1`: underpass, `0`: surface, `1`: elevated flyover)
+- `one_way`: `uint8` (1 byte, boolean flag)
+- `speed_limit_x10`: `uint16` (2 bytes, speed limit in km/h × 10)
+- `name_length`: `uint16` (2 bytes)
+- `name_utf8`: Variable string bytes
+- `coords_count`: `uint16` (2 bytes)
+- `coords_array`: Array of (`lat_float32`, `lon_float32`, `alt_float32`) (12 bytes per coordinate point)
+
+---
+
+## 5. Hardware-in-the-Loop CAN Telemetry (`can_simulator.py`)
+
+Simulates standard automotive CAN network frames for vehicle test benches:
+
+| CAN Identifier | Description | DLC | Cycle Time |
+|:---|:---|:---:|:---:|
+| `0x7E8` | OBD-II Mode 01 PID 0x0D Vehicle Speed ($0-255\text{ km/h}$) | 8 B | 100 ms |
+| `0x0B4` | 4-Wheel Pulse Speed Sensors (FL, FR, RL, RR in $0.01\text{ km/h}$) | 8 B | 10 ms |
+| `0x025` | Steering Wheel Angle Sensor ($\pm 780.0^\circ$ at $0.1^\circ/\text{LSB}$) | 4 B | 10 ms |
+| `0x120` | Chassis Stability Yaw Rate ($\text{rad/s}$) and Lateral Accel ($g$) | 8 B | 10 ms |
+

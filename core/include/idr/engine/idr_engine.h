@@ -231,7 +231,66 @@ public:
     void processBaro(const BaroSample& baro) {
         if (!baro.isValid()) return;
         last_pressure_hpa_ = baro.pressure_hpa;
-        // TODO: Barometric altitude aiding in EKF
+
+        if (!std::isfinite(ref_pressure_hpa_)) {
+            ref_pressure_hpa_ = baro.pressure_hpa;
+        }
+
+        if (ins_.isInitialized()) {
+            // Altitude offset from origin in meters (hypsometric approximation)
+            double baro_alt_enu = 44330.0 * (1.0 - std::pow(baro.pressure_hpa / ref_pressure_hpa_, 0.190284));
+            bool accepted = ekf_.updateBaroAltitude(baro_alt_enu, ins_.state().position.z(), 1.0);
+            if (accepted) {
+                ekf_.applyToNominal(ins_);
+            }
+        }
+    }
+
+    /// Process a wheel speed / vehicle odometry sample.
+    void processWheelSpeed(const WheelSpeedSample& wheel) {
+        if (!wheel.isValid() || !ins_.isInitialized()) return;
+
+        bool accepted = ekf_.updateWheelSpeed(wheel.speed_mps, ins_.state(), wheel.accuracy_mps);
+        if (accepted) {
+            ekf_.applyToNominal(ins_);
+        }
+    }
+
+    /// Process wheel speed with raw parameters.
+    void processWheelSpeed(Timestamp timestamp_ns, double speed_mps, double accuracy_mps = 0.2) {
+        WheelSpeedSample sample;
+        sample.timestamp_ns = timestamp_ns;
+        sample.speed_mps = speed_mps;
+        sample.accuracy_mps = accuracy_mps;
+        processWheelSpeed(sample);
+    }
+
+    /// Process a calibrated magnetometer sample.
+    void processMagnetometer(const MagSample& mag) {
+        if (!mag.isValid() || !ins_.isInitialized()) return;
+
+        double field_mag = mag.field_ut.norm();
+        // Reject magnetic anomaly: Earth's typical surface field is 25-65 µT
+        if (field_mag < 20.0 || field_mag > 75.0) {
+            return;
+        }
+
+        // Only compute heading if vehicle frame is leveled
+        if (alignment_.quality() < AlignmentQuality::COARSE) {
+            return;
+        }
+
+        // Rotate magnetic vector into leveled body frame
+        Vec3d b_body = alignment_.rotation().toRotationMatrix().transpose() * mag.field_ut;
+        double mag_heading = std::atan2(-b_body.y(), b_body.x());
+
+        Vec3d euler = quat::toEulerZYX(ins_.state().attitude);
+        double nom_yaw = euler.x();
+
+        bool accepted = ekf_.updateMagneticHeading(mag_heading, nom_yaw, 0.1);
+        if (accepted) {
+            ekf_.applyToNominal(ins_);
+        }
     }
 
     // ── Accessors ──
@@ -243,6 +302,7 @@ public:
     bool isStationary() const { return zupt_detector_.isStationary(); }
     bool isInitialized() const { return ins_.isInitialized(); }
     uint32_t imuCount() const { return imu_count_ + static_cast<uint32_t>(imu_init_count_); }
+
 
 private:
     void initializeFromGnss(const GnssMeasurement& gnss) {
@@ -405,6 +465,7 @@ private:
 
     // ── Sensors ──
     double last_pressure_hpa_ = std::numeric_limits<double>::quiet_NaN();
+    double ref_pressure_hpa_ = std::numeric_limits<double>::quiet_NaN();
 
     // ── Callbacks ──
     OutputCallback output_cb_;

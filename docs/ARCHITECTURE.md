@@ -115,7 +115,23 @@ Smartphones mounted on dashboards, windshields, or handlebar holders have an arb
 1. **Coarse Leveling (Gravity Vector Estimation):** Low-pass filtering stationary accelerometer readings yields the gravity unit vector $\mathbf{g}_P$. The pitch and roll angles are resolved to align phone $Z$ with true vertical.
 2. **Azimuth Alignment (Forward Acceleration Integration):** When the vehicle accelerates or brakes during GNSS tracking, forward acceleration $\mathbf{a}_{\text{fwd}}^V = [a_x^V, 0, 0]^T$ correlates with GNSS velocity derivative $\dot{\mathbf{v}}_{\text{gnss}}$. Cross-correlation resolves the remaining yaw rotation angle between the leveled phone frame and the vehicle longitudinal axis.
 
+### 3.4 Multi-Sensor Aiding & Odometry Models
+
+#### 3.4.1 Barometric Altimetry Aiding
+Barometric pressure $P$ is converted to relative ENU altitude using the hypsometric approximation:
+$$h_{\text{baro}} = 44330.0 \cdot \left(1 - \left(\frac{P}{P_0}\right)^{0.190284}\right)$$
+The observation model $z_{\text{baro}} = p_z^n + v_{\text{baro}}$ is gated through a 1-DOF $\chi^2$ innovation test, anchoring the vertical state during tunnel transits and resolving flyover deck transitions.
+
+#### 3.4.2 Wheel Speed Odometry (CAN / OBD-II)
+Wheel speed sensors report longitudinal vehicle speed $v_{\text{wheel}} = v_x^V$. The observation model links body forward velocity with navigation velocity:
+$$z_{\text{odo}} = (\mathbf{R}_V^n)_{1, :}^T \mathbf{v}^n - v_{\text{wheel}}$$
+The measurement Jacobian $\mathbf{H}_{\text{odo}} \in \mathbb{R}^{1 \times 15}$ observes both velocity and attitude errors, eliminating dead reckoning velocity drift during prolonged satellite outages.
+
+#### 3.4.3 Calibrated Magnetometer Heading
+Magnetic field vectors are leveled into the vehicle horizontal plane $\mathbf{b}_V = (\mathbf{R}_P^V)^T \mathbf{b}_P$, yielding magnetic heading $\psi_{\text{mag}} = \text{atan2}(-b_y, b_x)$. High-magnitude anomaly rejection ($\|b\| \notin [20, 75]\text{ \mu T}$) filters out steel bridges and railway line interference.
+
 ---
+
 
 ## 4. Multi-Task Deep Neural Motion Model
 

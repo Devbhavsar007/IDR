@@ -272,6 +272,78 @@ public:
         return update<2>(H, z, R_nhc);
     }
 
+    /// Barometric altitude measurement update.
+    ///
+    /// @param baro_alt_enu  Barometric altitude converted to ENU (meters)
+    /// @param nominal_alt_enu  Current nominal INS altitude in ENU (meters)
+    /// @param sigma_alt  Altitude 1σ measurement noise (meters)
+    bool updateBaroAltitude(double baro_alt_enu,
+                            double nominal_alt_enu,
+                            double sigma_alt) {
+        Eigen::Matrix<double, 1, eskf::kStateSize> H =
+            Eigen::Matrix<double, 1, eskf::kStateSize>::Zero();
+        H(0, eskf::kPosIdx + 2) = 1.0;
+
+        Eigen::Matrix<double, 1, 1> z;
+        z(0, 0) = baro_alt_enu - nominal_alt_enu;
+
+        Eigen::Matrix<double, 1, 1> R;
+        R(0, 0) = sigma_alt * sigma_alt;
+
+        return update<1>(H, z, R);
+    }
+
+    /// Wheel speed / longitudinal odometry measurement update.
+    ///
+    /// @param forward_speed_mps  Measured forward vehicle speed (m/s)
+    /// @param nominal  Current nominal state
+    /// @param sigma_speed  Speed 1σ uncertainty (m/s)
+    bool updateWheelSpeed(double forward_speed_mps,
+                          const NominalState& nominal,
+                          double sigma_speed) {
+        Mat3d R = nominal.attitude.toRotationMatrix();
+        Mat3d RT = R.transpose();
+        Vec3d v_body = RT * nominal.velocity;
+
+        // Innovation: forward speed measurement vs predicted body x velocity
+        Eigen::Matrix<double, 1, 1> z;
+        z(0, 0) = forward_speed_mps - v_body.x();
+
+        // Jacobian: row 0 of body velocity mapping
+        Mat3d v_nav_skew = quat::skewSymmetric(nominal.velocity);
+
+        Eigen::Matrix<double, 1, eskf::kStateSize> H =
+            Eigen::Matrix<double, 1, eskf::kStateSize>::Zero();
+        H.block<1, 3>(0, eskf::kVelIdx) = RT.row(0);
+        H.block<1, 3>(0, eskf::kAttIdx) = (RT * v_nav_skew).row(0);
+
+        Eigen::Matrix<double, 1, 1> R_mat;
+        R_mat(0, 0) = sigma_speed * sigma_speed;
+
+        return update<1>(H, z, R_mat);
+    }
+
+    /// Calibrated magnetic heading measurement update.
+    ///
+    /// @param heading_rad  Measured magnetic heading (radians, ENU frame: yaw angle)
+    /// @param nominal_yaw_rad  Current nominal yaw in radians
+    /// @param sigma_yaw  Heading 1σ uncertainty (radians)
+    bool updateMagneticHeading(double heading_rad,
+                               double nominal_yaw_rad,
+                               double sigma_yaw) {
+        Eigen::Matrix<double, 1, eskf::kStateSize> H =
+            Eigen::Matrix<double, 1, eskf::kStateSize>::Zero();
+        H(0, eskf::kAttIdx + 2) = 1.0;
+
+        Eigen::Matrix<double, 1, 1> z;
+        z(0, 0) = angle::wrapPi(heading_rad - nominal_yaw_rad);
+
+        Eigen::Matrix<double, 1, 1> R;
+        R(0, 0) = sigma_yaw * sigma_yaw;
+
+        return update<1>(H, z, R);
+    }
+
     /// Apply the accumulated error state to the nominal state,
     /// then reset the error state to zero.
     void applyToNominal(StrapdownIns& ins) {

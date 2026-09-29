@@ -129,4 +129,23 @@ struct BaroSample {
     }
 };
 
+// ────────────────────────────────────────────────────────
+// Wheel Speed / Vehicle Odometry sample
+// ────────────────────────────────────────────────────────
+
+/// Wheel speed or OBD-II vehicle speed measurement from vehicle CAN bus.
+struct WheelSpeedSample {
+    Timestamp timestamp_ns = kInvalidTimestamp;
+    double speed_mps = 0.0;               ///< Forward ground speed in m/s
+    double accuracy_mps = 0.2;            ///< Measurement 1σ uncertainty in m/s
+    SensorHealth health = SensorHealth::VALID;
+
+    bool isValid() const {
+        return timestamp_ns != kInvalidTimestamp &&
+               std::isfinite(speed_mps) &&
+               speed_mps >= 0.0 && speed_mps < 120.0;  // realistic vehicle speed (0 to ~430 km/h)
+    }
+};
+
 }  // namespace idr
+

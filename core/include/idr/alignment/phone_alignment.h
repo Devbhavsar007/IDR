@@ -103,6 +103,7 @@ public:
             if (gravity_init_count_ == config_.gravity_init_samples) {
                 Vec3d g_avg = (gravity_accum_ / static_cast<double>(gravity_init_count_)).normalized();
                 computePitchRoll(g_avg);
+                gravity_ref_ = g_avg;
                 quality_ = AlignmentQuality::GRAVITY;
                 spdlog::info("Alignment: gravity converged, pitch={:.1f}° roll={:.1f}°",
                              pitch_rad_ * constants::kRadToDeg,
@@ -183,6 +184,7 @@ public:
             double heading_std = computeCircularStd();
             if (heading_std < config_.heading_residual_threshold_rad) {
                 quality_ = AlignmentQuality::CONVERGED;
+                gravity_ref_ = gravity_ema_;
                 confidence_ = std::min(confidence_ + 0.05, 1.0);
             }
         }
@@ -202,6 +204,62 @@ public:
         }
     }
 
+    /// Continuous dynamic re-calibration and degradation tracking (Blueprint v1.1 §4)
+    void continuousUpdate(const Vec3d& gravity_phone,
+                          double gnss_heading_rad,
+                          double vehicle_speed_mps,
+                          double gyro_yaw_rate_rad_s,
+                          double dt_sec) {
+        // 1. Track gravity consistency relative to converged reference
+        double g_mag = gravity_phone.norm();
+        if (g_mag >= 5.0 && g_mag <= 15.0) {
+            Vec3d g_norm = gravity_phone / g_mag;
+            double dot = std::clamp(gravity_ref_.dot(g_norm), -1.0, 1.0);
+            gravity_consistency_ = 0.95 * gravity_consistency_ + 0.05 * std::max(0.0, dot);
+
+            // Continuous complementary pitch/roll tracking
+            Vec3d blended = (0.98 * gravity_ema_ + 0.02 * g_norm).normalized();
+            computePitchRoll(blended);
+        }
+
+        // 2. Track heading residual during motion
+        if (std::isfinite(gnss_heading_rad) && vehicle_speed_mps > config_.min_speed_for_yaw_mps) {
+            double residual = std::abs(angle::angleDifference(yaw_rad_, gnss_heading_rad));
+            heading_residuals_.push_back(residual);
+            if (heading_residuals_.size() > 30) {
+                heading_residuals_.pop_front();
+            }
+            double sum_sq = 0.0;
+            for (double r : heading_residuals_) sum_sq += r * r;
+            heading_residual_rms_ = std::sqrt(sum_sq / static_cast<double>(heading_residuals_.size()));
+
+            // High observability boost during turns with reliable GNSS
+            if (std::abs(gyro_yaw_rate_rad_s) > 0.10 && vehicle_speed_mps > 5.0 && heading_residual_rms_ < 0.08) {
+                confidence_ = std::min(confidence_ + 0.02, 1.0);
+            }
+        }
+
+        // 3. Natural entropy decay
+        decayConfidence(dt_sec);
+
+        // 4. Trigger re-calibration if anomalies detected
+        bool needs_recal = false;
+        if (gravity_consistency_ < 0.70) needs_recal = true;
+        if (heading_residual_rms_ > 0.18) needs_recal = true; // ~10.3 deg
+        if (confidence_ < 0.25) needs_recal = true;
+
+        if (needs_recal) {
+            quality_ = AlignmentQuality::COARSE;
+            needs_recalibration_ = true;
+            confidence_ = std::max(0.1, confidence_ * 0.95);
+        } else if (confidence_ > 0.70 && quality_ == AlignmentQuality::CONVERGED) {
+            needs_recalibration_ = false;
+            gravity_ref_ = gravity_ema_;
+        }
+
+        updateRotation();
+    }
+
     // ── Accessors ──
 
     /// Get the phone-to-vehicle rotation quaternion.
@@ -213,6 +271,14 @@ public:
     double pitchRad() const { return pitch_rad_; }
     double rollRad() const { return roll_rad_; }
     double yawRad() const { return yaw_rad_; }
+    double gravityConsistency() const { return gravity_consistency_; }
+    double headingResidualRms() const { return heading_residual_rms_; }
+    bool needsRecalibration() const { return needs_recalibration_; }
+
+    /// Recommended covariance inflation factor when alignment degrades
+    double alignmentInflationFactor() const {
+        return std::clamp(1.0 / std::max(confidence_, 0.05), 1.0, 20.0);
+    }
 
     /// Get alignment state for NHC modulation
     AlignmentState alignmentState() const {
@@ -275,6 +341,13 @@ private:
     Quaterniond R_vehicle_phone_ = Quaterniond::Identity();
     AlignmentQuality quality_ = AlignmentQuality::NONE;
     double confidence_ = 0.0;
+
+    // Continuous dynamic re-calibration tracking
+    Vec3d gravity_ref_ = Vec3d(0.0, 0.0, 1.0);
+    double gravity_consistency_ = 1.0;
+    double heading_residual_rms_ = 0.0;
+    bool needs_recalibration_ = false;
+    std::deque<double> heading_residuals_;
 };
 
 }  // namespace idr

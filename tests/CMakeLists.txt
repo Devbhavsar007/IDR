@@ -15,6 +15,9 @@ add_executable(idr-tests
     unit/test_replay.cpp
     unit/test_multisensor_fusion.cpp
     unit/test_iekf.cpp
+    unit/test_spoofing_detector.cpp
+    unit/test_continuous_aligner.cpp
+    unit/test_particle_filter_matcher.cpp
 )
 
 target_include_directories(idr-tests PRIVATE

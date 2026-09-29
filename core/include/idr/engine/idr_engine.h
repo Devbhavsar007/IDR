@@ -142,8 +142,10 @@ public:
             applyNhc();
         }
 
-        // ── Confidence decay ──
-        alignment_.decayConfidence(dt);
+        // ── Continuous dynamic alignment tracking ──
+        last_imu_gyro_z_ = imu.gyro.z();
+        double gnss_hdg = last_gnss_has_bearing_ ? last_gnss_bearing_rad_ : std::numeric_limits<double>::quiet_NaN();
+        alignment_.continuousUpdate(gravity_vec, gnss_hdg, last_gnss_speed_mps_, imu.gyro.z(), dt);
 
         // ── Output at configured rate ──
         imu_count_++;
@@ -173,22 +175,31 @@ public:
 
         // ── Update ZUPT with GNSS speed ──
         zupt_detector_.updateGnssSpeed(static_cast<double>(gnss.speed_mps));
+        last_gnss_speed_mps_ = static_cast<double>(gnss.speed_mps);
+        if (gnss.hasBearing()) {
+            last_gnss_bearing_rad_ = static_cast<double>(gnss.bearing_deg) * constants::kDegToRad;
+            last_gnss_has_bearing_ = true;
+        }
 
-        // ── Integrity assessment ──
+        // ── Integrity & Anti-Spoofing assessment ──
         double ekf_heading = quat::toEulerZYX(ins_.state().attitude)[0];
         auto assessment = integrity_monitor_.assess(
             gnss,
             ins_.state().position,
             ins_.state().velocity,
             ekf_heading,
-            ekf_.horizontalAccuracy()
+            ekf_.horizontalAccuracy(),
+            last_imu_gyro_z_
         );
 
         gnss_integrity_ = assessment.state;
+        last_spoofing_score_ = assessment.spoofing_score;
+        last_is_spoofed_ = assessment.is_spoofed;
 
         if (!assessment.use_measurement) {
-            spdlog::debug("GNSS rejected: integrity={}",
-                          static_cast<int>(assessment.state));
+            spdlog::debug("GNSS rejected: integrity={}, spoofing_score={:.2f}",
+                          static_cast<int>(assessment.state),
+                          assessment.spoofing_score);
             return;
         }
 
@@ -427,6 +438,9 @@ private:
         state.mode = nav_mode_;
         state.gnss_confidence = (gnss_integrity_ == GnssIntegrity::HEALTHY) ? 1.0 :
                                 (gnss_integrity_ == GnssIntegrity::DEGRADED) ? 0.5 : 0.0;
+        state.alignment_confidence = alignment_.confidence();
+        state.spoofing_score = last_spoofing_score_;
+        state.is_spoofed = last_is_spoofed_;
         state.is_stationary = zupt.is_stationary;
         state.alignment_quality = static_cast<uint8_t>(alignment_.quality());
 
@@ -463,9 +477,15 @@ private:
     int imu_init_count_ = 0;
     uint32_t imu_count_ = 0;
 
-    // ── Sensors ──
+    // ── Sensors & Integrity Tracking ──
     double last_pressure_hpa_ = std::numeric_limits<double>::quiet_NaN();
     double ref_pressure_hpa_ = std::numeric_limits<double>::quiet_NaN();
+    double last_imu_gyro_z_ = 0.0;
+    double last_spoofing_score_ = 0.0;
+    bool last_is_spoofed_ = false;
+    double last_gnss_speed_mps_ = 0.0;
+    double last_gnss_bearing_rad_ = 0.0;
+    bool last_gnss_has_bearing_ = false;
 
     // ── Callbacks ──
     OutputCallback output_cb_;

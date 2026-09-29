@@ -2,16 +2,19 @@
 // Copyright (c) 2026 IDR Project. All rights reserved.
 //
 // GNSS Integrity Monitor — 4-state machine with innovation gating,
-// spoofing detection, and hysteresis.
+// explicit multi-feature spoofing detection, and hysteresis.
 
 #pragma once
 
+#include "idr/integrity/spoofing_detector.h"
 #include "idr/sensors/sensor_types.h"
 #include "idr/types/common.h"
+#include "idr/math_utils/quat_utils.h"
 
 #include <spdlog/spdlog.h>
 #include <cmath>
 #include <deque>
+#include <vector>
 
 namespace idr {
 
@@ -49,9 +52,8 @@ struct IntegrityConfig {
     // Satellite
     int min_satellites = 4;
 
-    // Spoofing
-    double spoof_suspect_threshold = 0.6;
-    double spoof_alert_threshold   = 0.8;
+    // Spoofing parameters
+    SpoofingDetectorConfig spoofing_config;
 };
 
 /// Result of GNSS integrity assessment for a single epoch.
@@ -65,27 +67,24 @@ struct IntegrityAssessment {
     bool insufficient_sats = false;
     double innovation_nis = 0.0;
     double spoofing_score = 0.0;
+    bool is_spoofed = false;
     bool use_measurement = false;  ///< Whether EKF should use this GNSS fix
 };
 
-/// GNSS Integrity Monitor with 4-state hysteresis.
+/// GNSS Integrity Monitor with 4-state hysteresis and explicit spoofing defense.
 class GnssIntegrityMonitor {
 public:
     explicit GnssIntegrityMonitor(const IntegrityConfig& config = {})
-        : config_(config) {}
+        : config_(config), spoofing_detector_(config.spoofing_config) {}
 
-    /// Assess a new GNSS measurement.
-    ///
-    /// @param gnss  New GNSS fix
-    /// @param predicted_pos_enu  EKF-predicted position in ENU
-    /// @param predicted_vel_enu  EKF-predicted velocity in ENU
-    /// @param predicted_heading_rad  EKF-predicted heading (rad, CW from North)
-    /// @param pos_sigma  Position uncertainty from EKF (1σ, meters)
+    /// Assess a new GNSS measurement with IMU gyro and satellite constellation feedback.
     IntegrityAssessment assess(const GnssMeasurement& gnss,
                                [[maybe_unused]] const Vec3d& predicted_pos_enu,
                                const Vec3d& predicted_vel_enu,
                                double predicted_heading_rad,
-                               [[maybe_unused]] double pos_sigma) {
+                               [[maybe_unused]] double pos_sigma,
+                               double gyro_yaw_rate_rad_s = 0.0,
+                               const std::vector<SatelliteSignalInfo>& satellites = {}) {
         IntegrityAssessment result;
 
         // ── Basic validity ──
@@ -97,9 +96,10 @@ public:
         }
 
         // ── Stale fix ──
+        double dt_s = 1.0;
         if (last_fix_timestamp_ns_ != kInvalidTimestamp) {
-            double dt = nsToSec(gnss.timestamp_ns - last_fix_timestamp_ns_);
-            result.stale = (dt > config_.max_stale_sec);
+            dt_s = nsToSec(gnss.timestamp_ns - last_fix_timestamp_ns_);
+            result.stale = (dt_s > config_.max_stale_sec);
         }
         last_fix_timestamp_ns_ = gnss.timestamp_ns;
 
@@ -116,11 +116,41 @@ public:
         }
 
         // ── Heading anomaly ──
-        if (gnss.hasBearing() && ekf_speed > 10.0) {
+        double gnss_heading_rate = 0.0;
+        if (gnss.hasBearing()) {
             double gnss_heading = static_cast<double>(gnss.bearing_deg) * constants::kDegToRad;
-            double diff = std::abs(angle::angleDifference(gnss_heading, predicted_heading_rad));
-            result.heading_anomaly = (diff > config_.max_heading_diff_deg * constants::kDegToRad);
+            if (ekf_speed > 10.0) {
+                double diff = std::abs(angle::angleDifference(gnss_heading, predicted_heading_rad));
+                result.heading_anomaly = (diff > config_.max_heading_diff_deg * constants::kDegToRad);
+            }
+            if (has_last_bearing_ && dt_s > 0.001) {
+                gnss_heading_rate = angle::angleDifference(gnss_heading, last_bearing_rad_) / dt_s;
+            }
+            last_bearing_rad_ = gnss_heading;
+            has_last_bearing_ = true;
         }
+
+        // ── Spoofing defense evaluation ──
+        Vec3d gnss_vel_enu = Vec3d::Zero();
+        if (gnss.hasBearing()) {
+            double rad = static_cast<double>(gnss.bearing_deg) * constants::kDegToRad;
+            gnss_vel_enu.x() = static_cast<double>(gnss.speed_mps) * std::sin(rad); // East
+            gnss_vel_enu.y() = static_cast<double>(gnss.speed_mps) * std::cos(rad); // North
+        } else {
+            gnss_vel_enu = predicted_vel_enu; // fallback if no bearing
+        }
+
+        double vel_score = spoofing_detector_.checkVelocity(
+            gnss_vel_enu, predicted_vel_enu, gnss.speed_accuracy_mps);
+        double curv_score = spoofing_detector_.checkCurvature(gnss_heading_rate, gyro_yaw_rate_rad_s);
+        double cn0_score = spoofing_detector_.checkCn0Uniformity(satellites);
+        double clk_score = 0.0;
+
+        result.spoofing_score = spoofing_detector_.computeSpoofingScore(
+            vel_score, curv_score, clk_score, cn0_score);
+
+        bool spoofing_alert = spoofing_detector_.update(result.spoofing_score);
+        result.is_spoofed = spoofing_alert;
 
         // ── Accuracy check ──
         bool accuracy_ok = (gnss.horizontal_accuracy_m < config_.max_healthy_hAcc_m);
@@ -128,8 +158,8 @@ public:
 
         // ── Composite assessment ──
         bool any_anomaly = result.speed_anomaly || result.heading_anomaly ||
-                           result.insufficient_sats;
-        bool severe_anomaly = result.jump_detected || result.stale;
+                           result.insufficient_sats || spoofing_detector_.isSuspect();
+        bool severe_anomaly = result.jump_detected || result.stale || spoofing_detector_.isSpoofed();
 
         // ── State machine update ──
         if (!any_anomaly && !severe_anomaly && accuracy_ok) {
@@ -158,6 +188,19 @@ public:
     }
 
     GnssIntegrity state() const { return state_; }
+    const SpoofingDetector& spoofingDetector() const { return spoofing_detector_; }
+    SpoofingDetector& spoofingDetector() { return spoofing_detector_; }
+
+    void reset() {
+        state_ = GnssIntegrity::DENIED;
+        good_fix_count_ = 0;
+        anomaly_count_ = 0;
+        no_fix_count_ = 0;
+        last_fix_timestamp_ns_ = kInvalidTimestamp;
+        has_last_bearing_ = false;
+        last_bearing_rad_ = 0.0;
+        spoofing_detector_.reset();
+    }
 
 private:
     void updateGoodFix() {
@@ -209,13 +252,17 @@ private:
     }
 
     IntegrityConfig config_;
-    GnssIntegrity state_ = GnssIntegrity::DENIED;  // start denied until first valid fix
+    GnssIntegrity state_ = GnssIntegrity::DENIED;
 
     int good_fix_count_ = 0;
     int anomaly_count_ = 0;
     int no_fix_count_ = 0;
 
     Timestamp last_fix_timestamp_ns_ = kInvalidTimestamp;
+    bool has_last_bearing_ = false;
+    double last_bearing_rad_ = 0.0;
+
+    SpoofingDetector spoofing_detector_;
 };
 
 }  // namespace idr

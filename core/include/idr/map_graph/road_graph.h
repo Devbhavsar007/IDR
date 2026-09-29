@@ -153,6 +153,14 @@ public:
     size_t numRoads() const { return roads_.size(); }
     const RoadSegment& road(size_t idx) const { return roads_[idx]; }
 
+    /// Find road by ID. Returns pointer or nullptr if not found.
+    const RoadSegment* findRoad(int64_t road_id) const {
+        for (const auto& r : roads_) {
+            if (r.id == road_id) return &r;
+        }
+        return nullptr;
+    }
+
 private:
     using GridKey = int64_t;
 

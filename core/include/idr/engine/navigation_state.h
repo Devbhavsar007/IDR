@@ -55,11 +55,14 @@ struct NavigationState {
     double map_confidence       = 0.0;
     double alignment_confidence = 0.0;
 
-    // ── Map matching ──
-
     int64_t matched_road_id          = -1;   ///< -1 = no match
     double  matched_road_confidence  = 0.0;
     int     road_level               = 0;    ///< 0 = ground, 1 = flyover, -1 = underpass
+    double  map_entropy              = 0.0;  ///< Multi-hypothesis entropy (ambiguity measure)
+
+    // ── Integrity & Anti-Spoofing ──
+    double  spoofing_score           = 0.0;  ///< [0, 1] probability of GNSS spoofing
+    bool    is_spoofed               = false;
 
     // ── Vehicle state ──
 

@@ -1,0 +1,74 @@
+# IDR Engine Configuration (Default)
+# All values can be overridden per-device or per-deployment.
+
+# ── Sensor ──
+sensor:
+  imu:
+    expected_rate_hz: 100.0
+    max_gap_sec: 0.1
+    gravity_magnitude: 9.80665
+  gnss:
+    expected_rate_hz: 1.0
+    max_stale_sec: 3.0
+  barometer:
+    enabled: true
+    reference_pressure_hpa: 1013.25
+
+# ── Vehicle ──
+vehicle:
+  type: CAR  # CAR | TRUCK_BUS | TWO_WHEELER | UNKNOWN
+  wheelbase_m: 2.7
+  max_lateral_accel: 8.0
+  max_speed_mps: 55.0
+
+# ── Process Noise (EKF) ──
+process_noise:
+  accel_noise: 0.05       # m/s²/√Hz
+  gyro_noise: 0.005       # rad/s/√Hz
+  accel_bias_rw: 0.001    # m/s²·√Hz
+  gyro_bias_rw: 0.0001    # rad/s·√Hz
+
+# ── GNSS Integrity ──
+integrity:
+  innovation_warn_sigma: 3.0
+  innovation_reject_sigma: 5.0
+  max_healthy_hAcc_m: 10.0
+  max_degraded_hAcc_m: 30.0
+  jump_mahalanobis_threshold: 5.0
+  suspect_to_healthy_count: 5
+  spoofing:
+    suspect_threshold: 0.6
+    alert_threshold: 0.8
+
+# ── NHC ──
+nhc:
+  lateral_sigma: 0.1      # m/s (base, before adaptation)
+  vertical_sigma: 0.1     # m/s (base)
+
+# ── Map Matching ──
+map_matching:
+  enabled: true
+  search_radius_m: 50.0
+  max_candidates: 10
+  hmm_sigma_dist_m: 10.0
+  level_disambiguation: true
+
+# ── AI Model ──
+model:
+  path: "models/idr_unified_v1.onnx"
+  inference_rate_hz: 10.0
+  window_size: 200        # samples (2 sec at 100 Hz)
+  window_stride: 100      # samples (1 sec stride)
+  precision: FP16         # FP16 | INT8
+
+# ── Output ──
+output:
+  rate_hz: 10.0
+  include_diagnostics: true
+
+# ── Alignment ──
+alignment:
+  min_speed_for_yaw: 3.0  # m/s
+  gravity_consistency_threshold: 0.7
+  heading_residual_threshold_rad: 0.15
+  confidence_decay_rate: 0.001  # per second

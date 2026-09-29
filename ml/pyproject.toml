@@ -1,0 +1,61 @@
+[project]
+name = "idr-ml"
+version = "0.1.0"
+description = "IDR — ML training, evaluation, and export pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Proprietary"}
+
+dependencies = [
+    "torch>=2.2.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
+    "onnx>=1.15.0",
+    "onnxruntime>=1.17.0",
+    "scipy>=1.11.0",
+    "scikit-learn>=1.3.0",
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "ruff>=0.5.0",
+    "mypy>=1.8.0",
+    "ipykernel>=6.0",
+    "jupyter>=1.0",
+]
+mlops = [
+    "mlflow>=2.10.0",
+    "dvc>=3.30.0",
+    "dvc-gdrive>=3.0.0",
+]
+export = [
+    "onnxoptimizer>=0.3.0",
+    "onnxsim>=0.4.33",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "N", "SIM", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

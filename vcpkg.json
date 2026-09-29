@@ -1,0 +1,10 @@
+{
+  "name": "idr",
+  "version": "0.1.0",
+  "description": "Intelligent Dead Reckoning with GNSS Fusion",
+  "dependencies": [
+    "eigen3",
+    "spdlog",
+    "gtest"
+  ]
+}

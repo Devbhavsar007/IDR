@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  idr-api:
+    build:
+      context: ../../
+      dockerfile: cloud/docker/Dockerfile.api
+    container_name: idr-cloud-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - IDR_DB_PATH=/data/idr_telemetry.db
+      - PORT=8000
+    volumes:
+      - idr-telemetry-data:/data
+    networks:
+      - idr-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  prometheus:
+    image: prom/prometheus:v2.49.1
+    container_name: idr-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - idr-network
+    depends_on:
+      - idr-api
+
+volumes:
+  idr-telemetry-data:
+    name: idr_telemetry_data
+  prometheus-data:
+    name: idr_prometheus_data
+
+networks:
+  idr-network:
+    name: idr_network
+    driver: bridge

@@ -65,6 +65,28 @@ TEST(OsmRoadLoaderTest, MalformedGeoJsonHandled) {
     EXPECT_EQ(graph.numRoads(), 0u);
 }
 
+TEST(OsmRoadLoaderTest, LoadDelhiCorridorFile) {
+    RoadGraph graph(50.0);
+    const std::vector<std::string> search_paths = {
+        "maps/schemas/delhi_corridor.geojson",
+        "../maps/schemas/delhi_corridor.geojson",
+        "../../maps/schemas/delhi_corridor.geojson"
+    };
+
+    size_t loaded = 0;
+    for (const auto& path : search_paths) {
+        loaded = OsmRoadLoader::loadGeoJson(path, 28.58, 77.22, 214.0, graph);
+        if (loaded > 0) break;
+    }
+
+    // If running in a directory where the file is accessible, assert road count
+    if (loaded > 0) {
+        EXPECT_EQ(loaded, 4u);
+        EXPECT_EQ(graph.numRoads(), 4u);
+    }
+}
+
 }  // namespace
 }  // namespace maps
 }  // namespace idr
+

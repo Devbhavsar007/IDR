@@ -1,0 +1,63 @@
+name: IDR Continuous Integration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  cpp-engine:
+    name: C++ Core Engine Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libeigen3-dev nlohmann-json3-dev
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=ON \
+            -DBUILD_SIMULATION=ON
+
+      - name: Build C++ Target
+        run: cmake --build build -j$(nproc)
+
+      - name: Execute C++ Test Suite
+        run: ctest --test-dir build --output-on-failure
+
+  python-ml-cloud:
+    name: Python ML, Tools & Cloud Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install pytest fastapi uvicorn pydantic sqlalchemy httpx jsonschema cryptography
+
+      - name: Run ML Model Tests
+        run: python -m pytest ml/tests -v
+
+      - name: Run Developer Tools Tests
+        run: python -m pytest tools/ -v
+
+      - name: Run Map Schema Tests
+        run: python -m pytest maps/tests -v
+
+      - name: Run Cloud API & DPDP Tests
+        run: python -m pytest cloud/api/test_api.py -v

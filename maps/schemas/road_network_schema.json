@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "IdrRoadNetworkSchema",
+  "description": "GeoJSON FeatureCollection schema optimized for IDR high-rate HMM map matching and multi-layer elevation resolution.",
+  "type": "object",
+  "required": ["type", "features"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["FeatureCollection"]
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "geometry", "properties"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["Feature"]
+          },
+          "geometry": {
+            "type": "object",
+            "required": ["type", "coordinates"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["LineString"]
+              },
+              "coordinates": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          },
+          "properties": {
+            "type": "object",
+            "required": ["id", "name", "layer", "speed_limit_kmh", "one_way"],
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "layer": {
+                "type": "integer",
+                "description": "-1: Underpass/Tunnel, 0: Surface/At-grade, 1+: Elevated Flyover"
+              },
+              "speed_limit_kmh": {
+                "type": "number"
+              },
+              "one_way": {
+                "type": "boolean"
+              },
+              "surface_condition": {
+                "type": "string",
+                "enum": ["asphalt", "concrete", "potholed", "rumble_strip", "gravel"]
+              },
+              "elevation_m": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

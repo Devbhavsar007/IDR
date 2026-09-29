@@ -1,0 +1,30 @@
+# IDR Core C++ Engine Build and Verification Container
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    libeigen3-dev \
+    nlohmann-json3-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# Copy IDR core source tree and build configurations
+COPY core/ /workspace/core/
+COPY CMakeLists.txt /workspace/CMakeLists.txt
+
+# Configure and build IDR core
+RUN cmake -B build -S . \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=ON \
+    -DBUILD_SIMULATION=ON
+
+RUN cmake --build build -j$(nproc)
+
+# Run verification test suite by default
+CMD ["ctest", "--test-dir", "build", "--output-on-failure"]
